@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Box, Card, CardContent, CardHeader, Checkbox, Container, createMuiTheme, Divider, FormControl, Grid, IconButton, Paper, TextField, ThemeProvider } from '@material-ui/core';
+import { Box, Card, Checkbox, Container, createMuiTheme, Divider, Grid, IconButton, Snackbar, TextField, ThemeProvider } from '@material-ui/core';
 import DeleteIcon from '@material-ui/icons/Delete'
 import './App.css'
 import AddIcon from '@material-ui/icons/AddCircleOutline'
@@ -15,12 +15,12 @@ const theme = createMuiTheme({
       main: '#323232',
       light: '#c8c8c8'
     },
-  },
+  }
 });
 
 interface TodoItem {
   description: string,
-  deadline?: string,
+  deadline: string,
   completed: boolean
 }
 
@@ -32,6 +32,20 @@ interface AppState {
 const initialState: AppState = {
   items: [],
   selectedItemIndex: undefined
+}
+
+const shouldAlertItem = (item: TodoItem) => {
+  const deadlineTime = new Date(item.deadline).getTime()
+  const currentTime = new Date().getTime()
+
+  return currentTime - deadlineTime <= 5 * 60 * 1000 
+}
+
+const compareItemByDeadline = (itemA: TodoItem, itemB: TodoItem) => {
+  const deadlineA = new Date(itemA.deadline).getTime()
+  const deadlineB = new Date(itemB.deadline).getTime()
+
+  return deadlineA - deadlineB
 }
 
 const selectItemReducer = (itemIndex: number, state: AppState): AppState =>
@@ -52,10 +66,10 @@ const addItemReducer = (item: TodoItem, state: AppState): AppState => {
 }
 
 const deleteItemReducer = (itemIndex: number, state: AppState): AppState =>
-Object.assign({}, state, {
-  items: state.items.filter((_, index) => index !== itemIndex),
-  selectedItemIndex: undefined
-})
+  Object.assign({}, state, {
+    items: state.items.filter((_, index) => index !== itemIndex),
+    selectedItemIndex: undefined
+  })
 
 const updateItemReducer = (itemIndex: number, item: TodoItem, state: AppState): AppState => {
   const newItemList = state.items
@@ -68,30 +82,44 @@ const updateItemReducer = (itemIndex: number, item: TodoItem, state: AppState): 
   })
 }
 
+const newItem: TodoItem = {
+  description: '',
+  deadline: '',
+  completed: false
+}
+
 const App = () => {
   const [state, setState] = useState(initialState)
+  const [alertItem, setAlertItem] = useState(undefined as TodoItem | undefined)
 
-  const newItem: TodoItem = {
-    description: '',
-    deadline: undefined,
-    completed: false
+  const setItemTimeout = (item: TodoItem) => {
+    if (item.deadline) {
+      const deadlineTime = new Date(item.deadline).getTime()
+      const currentTime = new Date().getTime()
+    
+      setTimeout(() => {
+        setAlertItem(item)
+      }, deadlineTime - currentTime)
+    }
   }
-  const selectedItem: TodoItem = state.selectedItemIndex
-    ? state.items[state.selectedItemIndex]
-    : newItem
-
   const addItem = (item: TodoItem) => {
+    setItemTimeout(item)
     setState(addItemReducer(item, state))
   }
   const selectItem = (itemIndex: number) => {
     setState(selectItemReducer(itemIndex, state))
   }
   const updateItem = (itemIndex: number, item: TodoItem) => {
+    setItemTimeout(item)
     setState(updateItemReducer(itemIndex, item, state))
   }
   const deleteItem = (itemIndex: number) => {
     setState(deleteItemReducer(itemIndex, state))
   }
+
+  const selectedItem: TodoItem = state.selectedItemIndex !== undefined
+    ? state.items[state.selectedItemIndex]
+    : newItem
 
   return (
     <ThemeProvider theme={theme}>
@@ -106,9 +134,35 @@ const App = () => {
         <br />
         <br />
         <br />
-        <TodoList items={state.items} selectItem={selectItem} />
+        <TodoList
+          items={state.items}
+          selectedItemIndex={state.selectedItemIndex}
+          selectItem={selectItem}
+        />
+        <Box>
+          {alertItem && (
+            <Alert item={alertItem} />
+          )}
+        </Box>
       </Container>
     </ThemeProvider>
+  )
+}
+
+type AlertProps = {
+  item: TodoItem
+}
+
+const Alert = ({item}: AlertProps) => {
+  const [open, setOpen] = useState(true)
+
+  return item && (
+    <Snackbar
+      open={open}
+      onClose={() => setOpen(false)}
+      autoHideDuration={5000}
+      message={`Deadline is up for "${item.description.slice(0, 30)}..." !`}
+    />
   )
 }
 
@@ -120,97 +174,119 @@ type TodoFormProps = {
   deleteItem: (itemIndex: number) => void,
 }
 
-const TodoForm = (props: TodoFormProps) => {
-  const {item: selectedItem, selectedItemIndex, addItem, updateItem, deleteItem} = props
-  const [item, setItem] = useState(selectedItem)
+type TodoFormState = {
+  item: TodoItem,
+  selectedItemIndex?: number
+}
 
-  const updateItemField = (field: keyof TodoItem, value: any) => {
-    const newItem = Object.assign({}, item, {
+class TodoForm extends React.Component<TodoFormProps, TodoFormState> {
+  state = {
+    item: newItem,
+    selectedItemIndex: undefined
+  }
+
+  static getDerivedStateFromProps(props: TodoFormProps, state: TodoFormState) {
+    if (props.selectedItemIndex !== state.selectedItemIndex) {
+      return {
+        item: props.item,
+        selectedItemIndex: props.selectedItemIndex
+      }
+    }
+
+    return null
+  }
+
+  updateItemField = (field: keyof TodoItem, value: any) => {
+    const newItem = Object.assign({}, this.state.item, {
       [field]: value
     })
-    setItem(newItem)
+    this.setState({
+      item: newItem
+    })
   }
-  console.log('coll', item)
 
-  return (
-    <Box
-      display='flex'
-      flexDirection='row'
-      justifyContent='center'
-      alignItems='center'
-    >
-      <Card elevation={0}>
-        <Box
-          border={2}
-          borderColor='secondary.light'
-        >
-          <form>
-            <Box
-              display='flex'
-              flexDirection='row'
-              justifyContent='space-between'
-              alignItems='center'
-            >
-              <FormControl>
+  render () {
+    const {selectedItemIndex, addItem, updateItem, deleteItem} = this.props
+    const {item} = this.state
+
+    return (
+      <form>
+        <Grid container>
+          <Grid item xs={9}>
+            <Box border={1} borderRadius={4} borderColor='secondary.light'>
+              <Box
+                display='flex'
+                flexDirection='row'
+                justifyContent='space-between'
+                alignItems='center'
+              >
                 <Checkbox
                   color='primary'
                   checked={item.completed}
-                  onClick={(event: any) => updateItemField('completed', event.target.checked)}
-                />
-              </FormControl>
-              <FormControl>            
+                  onClick={(event: any) => this.updateItemField('completed', event.target.checked)}
+                />            
                 <TextField
                   type="datetime-local"
-                  defaultValue={item.deadline}
+                  value={item.deadline}
                   InputProps={{ disableUnderline: true }}
-                  onChange={event => updateItemField('deadline', event.target.value)}
+                  onChange={event => this.updateItemField('deadline', event.target.value)}
                 />
-              </FormControl>
+              </Box>
+              <Divider />
+              <Box padding={2}>
+                <TextField
+                  placeholder='Description'
+                  value={item.description}
+                  onChange={event => this.updateItemField('description', event.target.value)}
+                  multiline
+                  fullWidth
+                  rows={5}
+                  InputProps={{ disableUnderline: true }}
+                />
+              </Box>
             </Box>
-            <Divider />
-            <Box padding={2}>
-              <TextField
-                defaultValue={item.description}
-                onChange={event => updateItemField('description', event.target.value)}
-                multiline
-                fullWidth
-                InputProps={{ disableUnderline: true }}
-              />
+          </Grid>
+          <Grid item xs={3}>
+            <Box
+              display='flex'
+              justifyContent='center'
+              alignItems='center'
+              flexWrap='wrap'
+            >
+              {selectedItemIndex !== undefined
+                ? (
+                  <>
+                    <IconButton onClick={() => updateItem(selectedItemIndex, item)}>
+                      <CheckIcon fontSize='large' />
+                    </IconButton>
+                    <IconButton onClick={() => deleteItem(selectedItemIndex)}>
+                      <DeleteIcon fontSize='large' />
+                    </IconButton>
+                  </>
+                ) : (
+                  <>
+                    <IconButton onClick={() => addItem(item)}>
+                      <AddIcon fontSize='large' />
+                    </IconButton>
+                  </>
+                )
+              }
             </Box>
-          </form>
-        </Box>
-      </Card>
-      <Box>
-        {selectedItemIndex
-          ? (
-            <>
-              <IconButton onClick={() => updateItem(selectedItemIndex, item)}>
-                <CheckIcon fontSize='large' />
-              </IconButton>
-              <IconButton onClick={() => deleteItem(selectedItemIndex)}>
-                <DeleteIcon fontSize='large' />
-              </IconButton>
-            </>
-          ) : (
-            <>
-              <IconButton onClick={() => addItem(item)}>
-                <AddIcon fontSize='large' />
-              </IconButton>
-            </>
-          )
-        }
-      </Box>
-    </Box>
-  )
+          </Grid>
+        </Grid>
+      </form>
+    )
+  }
 }
 
 type TodoListProps = {
   items: TodoItem[],
+  selectedItemIndex?: number,
   selectItem: (itemIndex: number) => void
 }
 
 const TodoList = (props: TodoListProps) => {
-  const {items, selectItem} = props
+  const {items, selectedItemIndex, selectItem} = props
 
   return (
     <Grid
@@ -220,7 +296,11 @@ const TodoList = (props: TodoListProps) => {
     >
       {items.map((item, index) => (
         <Grid item xs={12} sm={6} md={4} lg={3} xl={2} key={index} >  
-          <TodoItem item={item} toggleSelect={() => selectItem(index)} />
+          <TodoItem
+            item={item}
+            isSelected={index === selectedItemIndex}
+            toggleSelect={() => selectItem(index)}
+          />
         </Grid>
       ))}
     </Grid>
@@ -229,14 +309,20 @@ const TodoList = (props: TodoListProps) => {
 
 type TodoItemProps = {
   item: TodoItem,
+  isSelected: boolean,
   toggleSelect: () => void
 }
 
 const TodoItem = (props: TodoItemProps) => {
-  const {item, toggleSelect} = props
+  const {item, isSelected, toggleSelect} = props
+
+  const deadline: string = Boolean(item.deadline)
+    ? item.deadline.split('T').join(', ')
+    : ''
 
   return (
     <Card onClick={toggleSelect}>
+      <div className={isSelected ? 'element-overlay' : ''} />
       <Box
         display='flex'
         flexDirection='row'
@@ -244,15 +330,18 @@ const TodoItem = (props: TodoItemProps) => {
         alignItems='center'
         padding={2}
       >
-        <TimelapseIcon />
-        <span>{item.deadline}</span>
+        {item.completed
+          ? <CheckIcon color='primary' />
+          : <TimelapseIcon color='secondary' />
+        }
+        <span>{deadline}</span>
       </Box>
       <Divider />
-      <Box padding={2}>
+      <Box padding={2} whiteSpace='pre-wrap'>
         {item.description}
       </Box>
     </Card>
   )
 }
 
-export default App;
+export default App
