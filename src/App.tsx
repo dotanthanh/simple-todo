@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Box, Container, Divider, ThemeProvider } from '@material-ui/core';
+import { Box, Container, Divider, ThemeProvider, Typography } from '@material-ui/core';
 
 import './App.css'
 import { theme } from './custom/theme'
@@ -27,7 +27,7 @@ const App = () => {
 
   // set timeout to alert when the task's deadline come
   const setItemTimeout = (item: ITodoItem) => {
-    if (item.deadline) {
+    if (item.deadline && !item.completed) {
       const deadlineTime = new Date(item.deadline).getTime()
       const currentTime = new Date().getTime()
     
@@ -61,6 +61,9 @@ const App = () => {
   return (
     <ThemeProvider theme={theme}>
       <Container className="App">
+        <Typography align='center' variant='h4' className='App-title'>
+          Simple Todo App
+        </Typography>
         <TodoForm
           item={selectedItem}
           selectedItemIndex={state.selectedItemIndex}
