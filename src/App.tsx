@@ -23,6 +23,7 @@ const initialAppState: IAppState = {
 const App = () => {
   const [state, setState] = useState(initialAppState)
   const [alertItem, setAlertItem] = useState(undefined as ITodoItem | undefined)
+  const [snackBarOpen, setSnackbarOpen] = useState(false)
 
   // set timeout to alert when the task's deadline come
   const setItemTimeout = (item: ITodoItem) => {
@@ -32,6 +33,7 @@ const App = () => {
     
       setTimeout(() => {
         setAlertItem(item)
+        setSnackbarOpen(true)
       }, deadlineTime - currentTime)
     }
   }
@@ -76,18 +78,15 @@ const App = () => {
         />
 
         {/* alert toast for when deadline comes */}
-        <Box>
-          {alertItem && (
-            <>
-              <Alert
-                message={`Deadline is up for "${alertItem.description.slice(0, 30)}..." !`}
-              />
-              <Alert
-                message={`Deadline is up for "${alertItem.description.slice(0, 30)}..." !`}
-              />
-            </>
-          )}
-        </Box>
+        {alertItem && (
+          <>
+            <Alert
+              open={snackBarOpen}
+              onClose={() => setSnackbarOpen(false)}
+              message={`Deadline is up for "${alertItem.description.slice(0, 30)}..." !`}
+            />
+          </>
+        )}
       </Container>
     </ThemeProvider>
   )

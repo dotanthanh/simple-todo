@@ -30,6 +30,7 @@ const TodoFormInfo = (props: TodoFormInfoProps) => {
           <TextField
             type="datetime-local"
             value={item.deadline}
+            inputProps={{ step: 1 }}
             InputProps={{ disableUnderline: true }}
             onChange={onChangeDeadline}
           />
